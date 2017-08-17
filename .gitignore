@@ -44,3 +44,6 @@ temp
 # Hide all hidden files
 .*
 !/.gitignore
+
+#Binary
+bchain

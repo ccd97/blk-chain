@@ -7,19 +7,28 @@
 #include <unordered_set>
 #include <thread>
 #include <chrono>
+#include <vector>
 
+#include "BlockChain.hpp"
 #include "PracticalSocket.hpp"
 #include "message.h"
 #include "EncoderDecoder.hpp"
 #include "log.h"
+#include "LockFreeQueue.hpp"
 
 static constexpr auto START_PORT = 50000;
 static constexpr auto END_PORT = 50100;
 static constexpr auto BUFFER_SIZE = 1024*2;
+static constexpr auto CHASH_QUEUE_SIZE = 1024 * 8;
 
 static constexpr auto IP_ADDR = "127.0.0.1";
 
+using Idx = unsigned long long int;
+
 class ClientHandler{
+
+  using Clock = std::chrono::high_resolution_clock;
+  using TimePoint = std::chrono::time_point<Clock>;
 
 private:
 
@@ -36,6 +45,12 @@ private:
   char sendBuffer[BUFFER_SIZE];
 
   std::thread listener_thread;
+  std::thread synchronizer;
+
+  BlockChain bchain;
+
+  LockFreeQueue<CHASH_QUEUE_SIZE, 1024> chash_lfq;
+
 
 public:
   ClientHandler(){
@@ -44,9 +59,8 @@ public:
     dmsg("Send Port : " << s_port);
     dmsg("Receive Port : " << r_port);
     sendConnectMessages();
-    listener_thread = std::thread([this](){
-      listen();
-    });
+    listener_thread = std::thread([this](){ listen(); });
+    synchronizer = std::thread([this](){ start_synchronizerronizer(); });
     listener_thread.detach();
   }
 
@@ -54,6 +68,14 @@ public:
     for(auto i : peer_ports){
       std::cout << "Peer : " << i << std::endl;;
     }
+  }
+
+  void printBlockChain(){
+    bchain.printChain();
+  }
+
+  void addData(std::string& data){
+    bchain.addData(data);
   }
 
 private:
@@ -81,9 +103,27 @@ private:
     }
   }
 
+  void sendChashRequest(Idx index){
+    int msgSize = encoder.encodeRequestChashMsg(sendBuffer, s_port, r_port, index);
+    for(auto p: peer_ports){
+      s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, p);
+    }
+  }
+
+  void sendDataRequest(Idx index, std::string chash, std::vector<unsigned short> ports){
+    int msgSize = encoder.encodeRequestDataMsg(sendBuffer, s_port, r_port, index, chash);
+    for(auto p : ports){
+      s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, p);
+    }
+    std::this_thread::sleep_for(std::chrono::microseconds(100000));
+    sendChashRequest(++index);
+  }
+
   void listen(){
     int totalRecvMsgSize = 0;
+
     while(true){
+
       totalRecvMsgSize = r_sock->recv(recvBuffer, BUFFER_SIZE, MSG_DONTWAIT);
       if(totalRecvMsgSize < 0 && errno != EAGAIN) {
           break; // Some error.
@@ -95,19 +135,102 @@ private:
       if(totalRecvMsgSize == 0) {
         break;
       }
+
       auto* messageHeader = (MessageHeader *)(recvBuffer);
+
       switch (messageHeader->msgType) {
+
         case MessageType::ConnectMsg:{
-          unsigned short pport = encoder.encodeConnectMsgAck(recvBuffer, r_port);
+          unsigned short pport = encoder.relayConnectAckMsg(recvBuffer, s_port, r_port);
           s_sock->sendTo(recvBuffer, sizeof(ConnectMessage), IP_ADDR, pport);
           peer_ports.insert(pport);
           break;
         }
+
         case MessageType::ConnectAcknowledgementMsg:{
-          peer_ports.insert(((ConnectMessage*) recvBuffer)->receivePort);
+          peer_ports.insert(((ConnectMessage*) recvBuffer)->header.receivePort);
+          break;
+        }
+
+        case MessageType::RequestChashMsg:{
+          auto [index, send_to_port] = decoder.decodeRequestChashMsg(recvBuffer);
+          if(index < bchain.getLength()){
+            auto requestedHash = bchain.getChash(index);
+            auto msgSize = encoder.encodeResponseHashMsg(sendBuffer, s_port, r_port, index, requestedHash);
+            s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, send_to_port);
+          }
+          break;
+        }
+
+        case MessageType::ResponseChashMsg:{
+          auto res = decoder.decodeResponseChashMsg(recvBuffer);
+          chash_lfq.push(res);
+          break;
+        }
+
+        case MessageType::RequestDataMsg:{
+          auto [index, send_to_port] = decoder.decodeRequestDataMsg(recvBuffer);
+          if(index < bchain.getLength()){
+            auto& data = bchain.getData(index);
+            auto msgSize = encoder.encodeResponseDataMsg(sendBuffer, s_port, r_port, index, data);
+            s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, send_to_port);
+          }
           break;
         }
       }
+    }
+
+  }
+
+  void start_synchronizerronizer(){
+
+    sendChashRequest(0);
+
+    Idx currIdx = -1;
+    TimePoint now = TimePoint();
+    std::unordered_map<std::string, std::vector<unsigned short>> chash_response_map;
+
+    while (true) {
+      if(!chash_lfq.empty()){
+        const chash_response* res = chash_lfq.front<chash_response>();
+
+        if(currIdx == -1){
+          currIdx = res->idx;
+          now = std::chrono::system_clock::now();
+        }
+
+        if(std::chrono::duration_cast<std::chrono::microseconds>(now - std::chrono::system_clock::now()).count() > 100000 || currIdx != res->idx){
+          int max = 0;
+          std::string chash;
+          std::vector<unsigned short>* max_elem;
+          for(auto& p: chash_response_map){
+            if(max < p.second.size()){
+              max = p.second.size();
+              max_elem = &p.second;
+              chash = p.first;
+            }
+          }
+          sendDataRequest(currIdx, chash, *max_elem);
+          currIdx = -1;
+          continue;
+        }
+
+        auto c_it = chash_response_map.find(res->chash);
+
+        if(c_it == chash_response_map.end()){
+          chash_response_map.emplace(res->chash, std::vector{res->port});
+        }
+        else{
+          c_it->second.push_back(res->port);
+        }
+
+        chash_lfq.pop(sizeof(chash_response));
+      }
+
+      if(std::chrono::duration_cast<std::chrono::seconds>(now - std::chrono::system_clock::now()).count() > 10){
+        sendChashRequest(0);
+      }
+
     }
 
   }

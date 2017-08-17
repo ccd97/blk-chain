@@ -3,6 +3,10 @@
 
 #include <list>
 #include <iostream>
+#include <chrono>
+#include <unordered_map>
+#include <vector>
+#include <thread>
 
 #include "Block.hpp"
 
@@ -32,6 +36,10 @@ public:
     repairChain();
   }
 
+  auto getLength(){
+    return chain.size();
+  }
+
   void repairChain(){
     auto f_it = chain.begin();
     auto s_it = ++chain.begin();
@@ -44,6 +52,18 @@ public:
     }
   }
 
+  auto getChash(auto index){
+    auto c_it = chain.begin();
+    std::advance(c_it, index);
+    return c_it->get_chash();
+  }
+
+  std::string& getData(auto index){
+    auto c_it = chain.begin();
+    std::advance(c_it, index);
+    return c_it->get_data();
+  }
+
   void printChain(){
     for(auto& b : chain){
       std::cout<<"========== Block " << b.get_index() << " ==========" << std::endl;
@@ -53,7 +73,6 @@ public:
       std::cout<<std::endl;
     }
   }
-
 
 };
 
