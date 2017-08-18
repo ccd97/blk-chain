@@ -60,8 +60,8 @@ public:
     dmsg("Receive Port : " << r_port);
     sendConnectMessages();
     listener_thread = std::thread([this](){ listen(); });
-    synchronizer = std::thread([this](){ start_synchronizerronizer(); });
-    listener_thread.detach();
+    synchronizer = std::thread([this](){ start_synchronizer(); });
+    // listener_thread.detach();
   }
 
   void printPeers(){
@@ -85,12 +85,12 @@ private:
     while(true){
       unsigned short rand_port = std::rand()%(END_PORT-START_PORT + 1) + START_PORT;
       try{
-        dmsg("opening port on " << rand_port);
+        dmsg("acquiring socket on " << rand_port);
         sock = new UDPSocket(rand_port);
         return rand_port;
       }
       catch(SocketException &exp){
-        err("failed to open port on " << rand_port);
+        err("failed to acquire socket on port " << rand_port);
         continue;
       }
     }
@@ -106,6 +106,7 @@ private:
   void sendChashRequest(Idx index){
     int msgSize = encoder.encodeRequestChashMsg(sendBuffer, s_port, r_port, index);
     for(auto p: peer_ports){
+      // err("Sending chash request for index:" << index << " to port:" << p);
       s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, p);
     }
   }
@@ -113,6 +114,7 @@ private:
   void sendDataRequest(Idx index, std::string chash, std::vector<unsigned short> ports){
     int msgSize = encoder.encodeRequestDataMsg(sendBuffer, s_port, r_port, index, chash);
     for(auto p : ports){
+      // err("Sending DATA request for index:" << index << " to port:" << p);
       s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, p);
     }
     std::this_thread::sleep_for(std::chrono::microseconds(100000));
@@ -154,9 +156,11 @@ private:
 
         case MessageType::RequestChashMsg:{
           auto [index, send_to_port] = decoder.decodeRequestChashMsg(recvBuffer);
+          // err("Received chash message request for index:" << index << " to port:" << send_to_port);
           if(index < bchain.getLength()){
             auto requestedHash = bchain.getChash(index);
             auto msgSize = encoder.encodeResponseHashMsg(sendBuffer, s_port, r_port, index, requestedHash);
+            // err("Sending response hash : " << requestedHash);
             s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, send_to_port);
           }
           break;
@@ -164,14 +168,16 @@ private:
 
         case MessageType::ResponseChashMsg:{
           auto res = decoder.decodeResponseChashMsg(recvBuffer);
+          // err("Received chash message response for index:" << res.idx << " with hash:" << res.chash);
           chash_lfq.push(res);
           break;
         }
 
         case MessageType::RequestDataMsg:{
           auto [index, send_to_port] = decoder.decodeRequestDataMsg(recvBuffer);
+          // err("Received DATA message request for index:" << index << " to port:" << send_to_port);
           if(index < bchain.getLength()){
-            auto& data = bchain.getData(index);
+            auto&& data = bchain.getData(index);
             auto msgSize = encoder.encodeResponseDataMsg(sendBuffer, s_port, r_port, index, data);
             s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, send_to_port);
           }
@@ -182,24 +188,30 @@ private:
 
   }
 
-  void start_synchronizerronizer(){
+  void start_synchronizer(){
+
+    // dmsg("Starting synchronizer");
 
     sendChashRequest(0);
 
     Idx currIdx = -1;
-    TimePoint now = TimePoint();
+    TimePoint now = std::chrono::system_clock::now();
     std::unordered_map<std::string, std::vector<unsigned short>> chash_response_map;
 
     while (true) {
       if(!chash_lfq.empty()){
+        // err("Got something in chash_lfq");
         const chash_response* res = chash_lfq.front<chash_response>();
 
         if(currIdx == -1){
           currIdx = res->idx;
           now = std::chrono::system_clock::now();
+          chash_response_map.clear();
         }
 
-        if(std::chrono::duration_cast<std::chrono::microseconds>(now - std::chrono::system_clock::now()).count() > 100000 || currIdx != res->idx){
+        // error(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - now).count());
+
+        if(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - now).count() > 500 || currIdx != res->idx){
           int max = 0;
           std::string chash;
           std::vector<unsigned short>* max_elem;
@@ -227,7 +239,8 @@ private:
         chash_lfq.pop(sizeof(chash_response));
       }
 
-      if(std::chrono::duration_cast<std::chrono::seconds>(now - std::chrono::system_clock::now()).count() > 10){
+      if(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - now).count() > 10){
+        currIdx = -1;
         sendChashRequest(0);
       }
 

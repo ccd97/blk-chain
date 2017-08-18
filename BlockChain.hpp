@@ -19,11 +19,11 @@ private:
 public:
 
   BlockChain(){
-    chain.emplace_back(0, "", "The Genisys Block");
+    chain.emplace_back(0, "1234", "The Genisys Block");
     chain.back().mine_block();
   }
 
-  void addData(auto& data){
+  void addData(std::string& data){
     chain.emplace_back(chain.size(), chain.back().get_chash(), data);
     chain.back().mine_block();
   }
@@ -58,7 +58,7 @@ public:
     return c_it->get_chash();
   }
 
-  std::string& getData(auto index){
+  std::string getData(auto index){
     auto c_it = chain.begin();
     std::advance(c_it, index);
     return c_it->get_data();

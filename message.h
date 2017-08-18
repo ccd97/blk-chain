@@ -1,10 +1,9 @@
 #ifndef __MESSAGES_H__
 #define __MESSAGES_H__
 
-#include <string>
+#include "Block.hpp"
 
 using Idx = unsigned long long int;
-using Hash = std::string;
 
 enum MessageType{
   ConnectMsg,
@@ -34,19 +33,19 @@ struct RequestChashMessage{
 struct ResponseChashMessage{
   MessageHeader header;
   Idx idx;
-  Hash chash;
+  char chash[HASH_SIZE];
 };
 
 struct RequestDataMessage{
   MessageHeader header;
   Idx idx;
-  Hash chash;
+  char chash[HASH_SIZE];
 };
 
 struct ResponseDataMessage{
   MessageHeader header;
   Idx idx;
-  std::string data;
+  char data[DATA_SIZE];
 };
 
 struct chash_response {

@@ -20,7 +20,10 @@ int main(int argc, char const *argv[]) {
         std::cout<<"Enter Data :";
         std::cin>>data;
         c.addData(data);
+        break;
       }
+      default:
+        break;
       case 0:
         return 0;
     }

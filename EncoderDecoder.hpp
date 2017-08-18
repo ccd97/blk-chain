@@ -9,9 +9,10 @@
 
 class EncoderDecoder {
 
+public:
+
   //Encoder
 
-public:
   int encodeConnectMsg(auto& buffer, auto s_port_no, auto r_port_no){
     ConnectMessage msg;
     int msgSize = sizeof(ConnectMessage);
@@ -23,20 +24,6 @@ public:
     return msgSize;
   }
 
-  unsigned short relayConnectAckMsg(auto& buffer, auto s_port_no, auto r_port_no){
-    auto* msg = (ConnectMessage*) buffer;
-    unsigned short pport = msg->header.receivePort;
-    msg->header.msgType = MessageType::ConnectAcknowledgementMsg;
-    msg->header.senderPort = s_port_no;
-    msg->header.receivePort = r_port_no;
-    return pport;
-  }
-
-  auto decodeRequestChashMsg(auto& buffer){
-    auto* msg = (RequestChashMessage*) buffer;
-    return std::tuple{msg->idx, msg->header.receivePort};
-  }
-
   int encodeResponseHashMsg(auto& buffer, auto s_port_no, auto r_port_no, auto index, auto hash){
     ResponseChashMessage msg;
     int msgSize = sizeof(ResponseChashMessage);
@@ -45,7 +32,7 @@ public:
     msg.header.senderPort = s_port_no;
     msg.header.receivePort = r_port_no;
     msg.idx = index;
-    msg.chash = hash;
+    hash.copy(msg.chash, HASH_SIZE);
     std::memcpy(buffer, &msg, sizeof(ResponseChashMessage));
     return msgSize;
   }
@@ -58,19 +45,9 @@ public:
     msg.header.senderPort = s_port_no;
     msg.header.receivePort = r_port_no;
     msg.idx = index;
-    msg.data = data;
+    data.copy(msg.data, DATA_SIZE);
     std::memcpy(buffer, &msg, sizeof(ResponseDataMessage));
     return msgSize;
-  }
-
-  auto decodeResponseChashMsg(auto& buffer){
-    auto* msg = (ResponseChashMessage*) buffer;
-    return chash_response{msg->idx, msg->header.receivePort, msg->chash};
-  }
-
-  auto decodeRequestDataMsg(auto& buffer){
-    auto* msg = (RequestDataMessage*) buffer;
-    return std::tuple{msg->idx, msg->header.receivePort};
   }
 
   int encodeRequestDataMsg(auto& buffer, auto s_port_no, auto r_port_no, auto index, auto hash){
@@ -81,7 +58,7 @@ public:
     msg.header.senderPort = s_port_no;
     msg.header.receivePort = r_port_no;
     msg.idx = index;
-    msg.chash = hash;
+    hash.copy(msg.chash, HASH_SIZE);
     std::memcpy(buffer, &msg, sizeof(RequestDataMessage));
     return msgSize;
   }
@@ -96,6 +73,34 @@ public:
     msg.idx = index;
     std::memcpy(buffer, &msg, sizeof(RequestChashMessage));
     return msgSize;
+  }
+
+  // Decoder
+
+  auto decodeRequestChashMsg(auto& buffer){
+    auto* msg = (RequestChashMessage*) buffer;
+    return std::tuple{msg->idx, msg->header.receivePort};
+  }
+
+  auto decodeResponseChashMsg(auto& buffer){
+    auto* msg = (ResponseChashMessage*) buffer;
+    return chash_response{msg->idx, msg->header.receivePort, std::string(msg->chash)};
+  }
+
+  auto decodeRequestDataMsg(auto& buffer){
+    auto* msg = (RequestDataMessage*) buffer;
+    return std::tuple{msg->idx, msg->header.receivePort};
+  }
+
+  // Relay
+
+  unsigned short relayConnectAckMsg(auto& buffer, auto s_port_no, auto r_port_no){
+    auto* msg = (ConnectMessage*) buffer;
+    unsigned short pport = msg->header.receivePort;
+    msg->header.msgType = MessageType::ConnectAcknowledgementMsg;
+    msg->header.senderPort = s_port_no;
+    msg->header.receivePort = r_port_no;
+    return pport;
   }
 
 };

@@ -5,8 +5,14 @@
 #include <iomanip>
 #include <thread>
 #include <iostream>
+#include <cstring>
 
 #include <openssl/sha.h>
+
+#include "log.h"
+
+static constexpr auto HASH_SIZE = 64;
+static constexpr auto DATA_SIZE = 256;
 
 
 class Block{
@@ -17,14 +23,19 @@ class Block{
 private:
 
   Idx index;
-  std::string phash;
-  std::string chash;
   Nonce nonce;
-  std::string data;
+  char phash[HASH_SIZE] = {0};
+  char chash[HASH_SIZE] = {0};
+  char data[DATA_SIZE] = {0};
 
 public:
 
-  Block(Idx _idx, auto& _phash, auto& _data) : index(_idx), phash(_phash), data(_data) {
+  Block(const Idx _idx, const std::string _phash, const std::string& _data) : index(_idx){
+    if(_data.size() > DATA_SIZE){
+      throw "Size of input data is more than block data section";
+    }
+    _phash.copy(phash, _phash.size());
+    _data.copy(data, _data.size());
     mine_block();
   }
 
@@ -38,36 +49,37 @@ public:
 
   // Getters
 
-  auto& get_chash(){
-    return chash;
+  const auto get_chash(){
+    return std::string(chash, HASH_SIZE);
   }
 
-  auto& get_phash(){
-    return phash;
+  const auto get_phash(){
+    return std::string(phash, HASH_SIZE);
   }
 
-  auto get_index(){
+  const auto get_index(){
     return index;
   }
 
-  auto& get_data(){
-    return data;
+  const auto get_data(){
+    return std::string(data, DATA_SIZE);
   }
 
   // Setters
 
   void set_phash(auto&& _phash){
-    phash = _phash;
+    _phash.copy(phash, HASH_SIZE);
   }
 
   void set_data(auto&& _data){
-    data = _data;
+    _data.copy(data, DATA_SIZE);
   }
 
 private:
 
   void hash_it(){
-    chash = sha256(std::to_string(index) + phash + data + std::to_string(nonce));
+    auto hash = sha256(std::to_string(index) + std::string(phash) + std::string(data) + std::to_string(nonce));
+    hash.copy(chash, hash.length());
   }
 
   std::string sha256(const std::string& str) {
@@ -84,7 +96,7 @@ private:
   }
 
   bool is_mined(){
-    auto len = chash.length();
+    auto len = HASH_SIZE;
     if (chash[len - 1] == '4' && chash[len - 2] == '3' &&
         chash[len - 3] == '2' && chash[len - 4] == '1') {
       return true;
