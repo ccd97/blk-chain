@@ -28,6 +28,17 @@ public:
     chain.back().mine_block();
   }
 
+  void updateBlock(auto _idx, auto _nonce, auto& _phash, auto& _chash, auto& _data){
+    if(_idx == chain.size()){
+      chain.emplace_back(_idx, _nonce, _phash, _chash, _data);
+    }
+    else if(_idx < chain.size()){
+      auto c_it = chain.begin();
+      std::advance(c_it, _idx);
+      c_it->update_block(_nonce, _phash, _chash, _data);
+    }
+  }
+
   void updateData(auto _idx, auto& _data){
     auto c_it = chain.begin();
     std::advance(c_it, _idx);
@@ -58,10 +69,10 @@ public:
     return c_it->get_chash();
   }
 
-  std::string getData(auto index){
+  auto getBlock(auto index){
     auto c_it = chain.begin();
     std::advance(c_it, index);
-    return c_it->get_data();
+    return std::tuple{c_it->get_nonce(), c_it->get_phash(), c_it->get_chash(), c_it->get_data()};
   }
 
   void printChain(){

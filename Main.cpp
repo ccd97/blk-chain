@@ -1,9 +1,19 @@
 #include <iostream>
+#include <signal.h>
 
 #include "ClientHandler.hpp"
 
+ClientHandler c;
+
+void sig_int_handler(int s){
+  c.disconnect();
+  exit(1);
+}
+
 int main(int argc, char const *argv[]) {
-  ClientHandler c;
+
+  signal(SIGINT, sig_int_handler);
+
   while(true){
     int choice;
     std::cout<<"\n1.Print Client Ports \n2.Print BlockChain \n3.Add Data \n0.Exit \nEnter Choice:";
@@ -25,6 +35,7 @@ int main(int argc, char const *argv[]) {
       default:
         break;
       case 0:
+        c.disconnect();
         return 0;
     }
   }

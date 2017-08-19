@@ -4,6 +4,7 @@
 #include "Block.hpp"
 
 using Idx = unsigned long long int;
+using Nonce = unsigned long long int;
 
 enum MessageType{
   ConnectMsg,
@@ -11,7 +12,8 @@ enum MessageType{
   RequestChashMsg,
   ResponseChashMsg,
   RequestDataMsg,
-  ResponseDataMsg
+  ResponseDataMsg,
+  DisconnectMsg
 };
 
 struct MessageHeader{
@@ -22,6 +24,10 @@ struct MessageHeader{
 };
 
 struct ConnectMessage{
+  MessageHeader header;
+};
+
+struct DisconnectMessage{
   MessageHeader header;
 };
 
@@ -45,6 +51,9 @@ struct RequestDataMessage{
 struct ResponseDataMessage{
   MessageHeader header;
   Idx idx;
+  Nonce nonce;
+  char phash[HASH_SIZE];
+  char chash[HASH_SIZE];
   char data[DATA_SIZE];
 };
 
@@ -52,6 +61,15 @@ struct chash_response {
   Idx idx;
   unsigned short port;
   std::string chash;
+};
+
+struct data_response {
+  Idx idx;
+  unsigned short port;
+  Nonce nonce;
+  std::string phash;
+  std::string chash;
+  std::string data;
 };
 
 #endif

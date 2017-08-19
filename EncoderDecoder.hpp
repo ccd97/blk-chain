@@ -24,6 +24,17 @@ public:
     return msgSize;
   }
 
+  int encodeDisconnectMsg(auto& buffer, auto s_port_no, auto r_port_no){
+    DisconnectMessage msg;
+    int msgSize = sizeof(DisconnectMessage);
+    msg.header.packetSize = msgSize;
+    msg.header.msgType = MessageType::DisconnectMsg;
+    msg.header.senderPort = s_port_no;
+    msg.header.receivePort = r_port_no;
+    std::memcpy(buffer, &msg, sizeof(DisconnectMessage));
+    return msgSize;
+  }
+
   int encodeResponseHashMsg(auto& buffer, auto s_port_no, auto r_port_no, auto index, auto hash){
     ResponseChashMessage msg;
     int msgSize = sizeof(ResponseChashMessage);
@@ -37,7 +48,7 @@ public:
     return msgSize;
   }
 
-  int encodeResponseDataMsg(auto& buffer, auto s_port_no, auto r_port_no, auto index, auto& data){
+  int encodeResponseDataMsg(auto& buffer, auto s_port_no, auto r_port_no, auto index, auto nonce, auto& phash, auto& chash, auto& data){
     ResponseDataMessage msg;
     int msgSize = sizeof(ResponseDataMessage);
     msg.header.packetSize = msgSize;
@@ -45,6 +56,9 @@ public:
     msg.header.senderPort = s_port_no;
     msg.header.receivePort = r_port_no;
     msg.idx = index;
+    msg.nonce = nonce;
+    phash.copy(msg.phash, HASH_SIZE);
+    chash.copy(msg.chash, HASH_SIZE);
     data.copy(msg.data, DATA_SIZE);
     std::memcpy(buffer, &msg, sizeof(ResponseDataMessage));
     return msgSize;
@@ -77,6 +91,11 @@ public:
 
   // Decoder
 
+  auto decodeDisconnectMsg(auto& buffer){
+    auto* msg = (DisconnectMessage*) buffer;
+    return msg->header.receivePort;
+  }
+
   auto decodeRequestChashMsg(auto& buffer){
     auto* msg = (RequestChashMessage*) buffer;
     return std::tuple{msg->idx, msg->header.receivePort};
@@ -90,6 +109,11 @@ public:
   auto decodeRequestDataMsg(auto& buffer){
     auto* msg = (RequestDataMessage*) buffer;
     return std::tuple{msg->idx, msg->header.receivePort};
+  }
+
+  auto decodeResponseDataMsg(auto& buffer){
+    auto* msg = (ResponseDataMessage*) buffer;
+    return data_response{msg->idx, msg->header.receivePort, msg->nonce, std::string(msg->phash), std::string(msg->chash), std::string(msg->data)};
   }
 
   // Relay

@@ -39,6 +39,12 @@ public:
     mine_block();
   }
 
+  Block(const Idx _idx, const Nonce _nonce, const std::string& _phash, const std::string& _chash, const std::string& _data): index(_idx), nonce(_nonce){
+    _phash.copy(phash, _phash.size());
+    _chash.copy(chash, _chash.size());
+    _data.copy(data, _data.size());
+  }
+
   void mine_block(bool force=false){
     if(force) hash_it();
     while(!is_mined()){
@@ -61,6 +67,10 @@ public:
     return index;
   }
 
+  const auto get_nonce(){
+    return nonce;
+  }
+
   const auto get_data(){
     return std::string(data, DATA_SIZE);
   }
@@ -72,6 +82,13 @@ public:
   }
 
   void set_data(auto&& _data){
+    _data.copy(data, DATA_SIZE);
+  }
+
+  void update_block(auto& _nonce, auto& _phash, auto& _chash, auto& _data){
+    nonce = _nonce;
+    _phash.copy(phash, HASH_SIZE);
+    _chash.copy(chash, HASH_SIZE);
     _data.copy(data, DATA_SIZE);
   }
 

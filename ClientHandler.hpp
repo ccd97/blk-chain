@@ -54,14 +54,13 @@ private:
 
 public:
   ClientHandler(){
-    s_port = allocate_port(s_sock);
-    r_port = allocate_port(r_sock);
+    s_port = allocatePort(s_sock);
+    r_port = allocatePort(r_sock);
     dmsg("Send Port : " << s_port);
     dmsg("Receive Port : " << r_port);
     sendConnectMessages();
     listener_thread = std::thread([this](){ listen(); });
-    synchronizer = std::thread([this](){ start_synchronizer(); });
-    // listener_thread.detach();
+    synchronizer = std::thread([this](){ startSyanchronizer(); });
   }
 
   void printPeers(){
@@ -78,9 +77,15 @@ public:
     bchain.addData(data);
   }
 
+  void disconnect(){
+    sendDisconnectMessage();
+    s_sock->disconnect();
+    r_sock->disconnect();
+  }
+
 private:
 
-  unsigned short allocate_port(auto& sock){
+  unsigned short allocatePort(auto& sock){
     std::srand(std::time(0));
     while(true){
       unsigned short rand_port = std::rand()%(END_PORT-START_PORT + 1) + START_PORT;
@@ -103,22 +108,29 @@ private:
     }
   }
 
-  void sendChashRequest(Idx index){
-    int msgSize = encoder.encodeRequestChashMsg(sendBuffer, s_port, r_port, index);
+  void sendDisconnectMessage(){
+    int msgSize = encoder.encodeDisconnectMsg(sendBuffer, s_port, r_port);
     for(auto p: peer_ports){
-      // err("Sending chash request for index:" << index << " to port:" << p);
       s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, p);
     }
   }
 
-  void sendDataRequest(Idx index, std::string chash, std::vector<unsigned short> ports){
-    int msgSize = encoder.encodeRequestDataMsg(sendBuffer, s_port, r_port, index, chash);
-    for(auto p : ports){
-      // err("Sending DATA request for index:" << index << " to port:" << p);
+  void sendChashRequest(Idx index){
+    // dmsg("Send Request Chash index:" << index);
+    int msgSize = encoder.encodeRequestChashMsg(sendBuffer, s_port, r_port, index);
+    for(auto p: peer_ports){
+      // dmsg("Send Request Chash index:" << index << " port:" << p);
       s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, p);
     }
-    std::this_thread::sleep_for(std::chrono::microseconds(100000));
-    sendChashRequest(++index);
+  }
+
+  void sendDataRequest(Idx index, std::string& chash, std::vector<unsigned short>& ports){
+    // dmsg("Send Request DATA index:" << index);
+    int msgSize = encoder.encodeRequestDataMsg(sendBuffer, s_port, r_port, index, chash);
+    for(auto p : ports){
+      // dmsg("Send Request DATA index:" << index << " port:" << p);
+      s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, p);
+    }
   }
 
   void listen(){
@@ -154,13 +166,21 @@ private:
           break;
         }
 
+        case MessageType::DisconnectMsg:{
+          unsigned short pport = encoder.decodeDisconnectMsg(recvBuffer);
+          auto p_it = peer_ports.find(pport);
+          if(p_it != peer_ports.end()){
+            peer_ports.erase(p_it);
+          }
+        }
+
         case MessageType::RequestChashMsg:{
           auto [index, send_to_port] = decoder.decodeRequestChashMsg(recvBuffer);
-          // err("Received chash message request for index:" << index << " to port:" << send_to_port);
+          // dmsg("Recv Request Chash index:" << index << " port:" << send_to_port);
           if(index < bchain.getLength()){
             auto requestedHash = bchain.getChash(index);
             auto msgSize = encoder.encodeResponseHashMsg(sendBuffer, s_port, r_port, index, requestedHash);
-            // err("Sending response hash : " << requestedHash);
+            // dmsg("Send Respons Chash : " << requestedHash);
             s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, send_to_port);
           }
           break;
@@ -168,19 +188,27 @@ private:
 
         case MessageType::ResponseChashMsg:{
           auto res = decoder.decodeResponseChashMsg(recvBuffer);
-          // err("Received chash message response for index:" << res.idx << " with hash:" << res.chash);
+          // dmsg("Recv Respons Chash index:" << res.idx << " hash:" << res.chash);
           chash_lfq.push(res);
           break;
         }
 
         case MessageType::RequestDataMsg:{
           auto [index, send_to_port] = decoder.decodeRequestDataMsg(recvBuffer);
-          // err("Received DATA message request for index:" << index << " to port:" << send_to_port);
+          // dmsg("Recv Request DATA index:" << index << " port:" << send_to_port);
           if(index < bchain.getLength()){
-            auto&& data = bchain.getData(index);
-            auto msgSize = encoder.encodeResponseDataMsg(sendBuffer, s_port, r_port, index, data);
+            auto&& [nonce, phash, chash, data] = bchain.getBlock(index);
+            auto msgSize = encoder.encodeResponseDataMsg(sendBuffer, s_port, r_port, index, nonce, phash, chash, data);
             s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, send_to_port);
           }
+          break;
+        }
+
+        case MessageType::ResponseDataMsg:{
+          auto res = decoder.decodeResponseDataMsg(recvBuffer);
+          // dmsg("Recv Reespons DATA index:" << res.idx << " data:" << res.data);
+          bchain.updateBlock(res.idx, res.nonce, res.phash, res.chash, res.data);
+          sendChashRequest(res.idx + 1);
           break;
         }
       }
@@ -188,9 +216,7 @@ private:
 
   }
 
-  void start_synchronizer(){
-
-    // dmsg("Starting synchronizer");
+  void startSyanchronizer(){
 
     sendChashRequest(0);
 
@@ -200,7 +226,6 @@ private:
 
     while (true) {
       if(!chash_lfq.empty()){
-        // err("Got something in chash_lfq");
         const chash_response* res = chash_lfq.front<chash_response>();
 
         if(currIdx == -1){
@@ -209,27 +234,13 @@ private:
           chash_response_map.clear();
         }
 
-        // error(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - now).count());
-
         if(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - now).count() > 500 || currIdx != res->idx){
-          int max = 0;
-          std::string chash;
-          std::vector<unsigned short>* max_elem;
-          for(auto& p: chash_response_map){
-            if(max < p.second.size()){
-              max = p.second.size();
-              max_elem = &p.second;
-              chash = p.first;
-            }
-          }
-          sendDataRequest(currIdx, chash, *max_elem);
+          sendDataRequestFromChashResponse(currIdx, chash_response_map);
           currIdx = -1;
           continue;
         }
 
-        auto c_it = chash_response_map.find(res->chash);
-
-        if(c_it == chash_response_map.end()){
+        if(auto c_it = chash_response_map.find(res->chash); c_it == chash_response_map.end()){
           chash_response_map.emplace(res->chash, std::vector{res->port});
         }
         else{
@@ -239,13 +250,31 @@ private:
         chash_lfq.pop(sizeof(chash_response));
       }
 
-      if(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - now).count() > 10){
+      if(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - now).count() > 100){
+        if(currIdx != -1){
+          sendDataRequestFromChashResponse(currIdx, chash_response_map);
+        }
         currIdx = -1;
+        now = std::chrono::system_clock::now();
         sendChashRequest(0);
       }
 
     }
 
+  }
+
+  void sendDataRequestFromChashResponse(auto& currIdx, auto& chash_response_map){
+    int max = 0;
+    std::string chash;
+    std::vector<unsigned short>* max_elem;
+    for(auto& p: chash_response_map){
+      if(max < p.second.size()){
+        max = p.second.size();
+        max_elem = &p.second;
+        chash = p.first;
+      }
+    }
+    sendDataRequest(currIdx, chash, *max_elem);
   }
 
 };
