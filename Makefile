@@ -1,20 +1,27 @@
-CPPFLAGS = --std=c++17 -Og -Wall -pthread -lssl -lcrypto
-INCDIRS = -I ./include
-GCCBIN = g++
+CC := g++
+
+SRCDIR := src
+BINDIR := bin
+TARGET := bchain
+
+CPPFLAGS := --std=c++17 -Og -Wall
+LIBFLAGS := -pthread -lssl -lcrypto
+INCDIRS := -I include
 
 .PHONY: all compile run clean cclean
 
 all: compile run clean
 
 compile:
-	@$(GCCBIN) $(CPPFLAGS) $(INCDIRS) Main.cpp -o bchain
+	@mkdir -p $(BINDIR)
+	@$(CC) $(CPPFLAGS) $(LIBFLAGS) $(INCDIRS) $(SRCDIR)/Main.cpp -o $(BINDIR)/$(TARGET)
 
 run:
-	@./bchain
+	@./$(BINDIR)/$(TARGET)
 
 cclean:
 	@find . -name "*.gch" -type f -delete
 
 clean: cclean
-	@rm -f bchain 
+	@rm -f -r $(BINDIR)
 	@find . -name "*.out" -type f -delete

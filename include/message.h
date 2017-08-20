@@ -1,10 +1,7 @@
 #ifndef __MESSAGES_H__
 #define __MESSAGES_H__
 
-#include "Block.hpp"
-
-using Idx = unsigned long long int;
-using Nonce = unsigned long long int;
+#include "BlockChain/Block.hpp"
 
 enum MessageType{
   ConnectMsg,

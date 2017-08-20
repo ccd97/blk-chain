@@ -3,9 +3,6 @@
 
 #include <string>
 #include <iomanip>
-#include <thread>
-#include <iostream>
-#include <cstring>
 
 #include <openssl/sha.h>
 
@@ -14,11 +11,11 @@
 static constexpr auto HASH_SIZE = 64;
 static constexpr auto DATA_SIZE = 256;
 
+using Idx = unsigned long long int;
+using Nonce = unsigned long long int;
+
 
 class Block{
-
-  using Idx = unsigned long long int;
-  using Nonce = unsigned long long int;
 
 private:
 

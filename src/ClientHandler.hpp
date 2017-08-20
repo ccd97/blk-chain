@@ -4,12 +4,13 @@
 #include <ctime>
 #include <cstdlib>
 #include <iostream>
+#include <unordered_map>
 #include <unordered_set>
 #include <thread>
 #include <chrono>
 #include <vector>
 
-#include "BlockChain.hpp"
+#include "BlockChain/BlockChain.hpp"
 #include "PracticalSocket.hpp"
 #include "message.h"
 #include "EncoderDecoder.hpp"
