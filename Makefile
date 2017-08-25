@@ -20,6 +20,7 @@ run:
 	@./$(BINDIR)/$(TARGET)
 
 cclean:
+	@find . -name "*.o" -type f -delete
 	@find . -name "*.gch" -type f -delete
 
 clean: cclean

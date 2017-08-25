@@ -16,7 +16,7 @@ $ make
 
 ### Todos
 
- - Add locks at critical sections (Currently program crashes due to improper thread synchronization)
+ - Too many locks - try to reduce them
 
 ### Note
 

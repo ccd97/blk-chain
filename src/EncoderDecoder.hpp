@@ -24,6 +24,17 @@ public:
     return msgSize;
   }
 
+  int encodeConnectAckMsg(auto& buffer, auto s_port_no, auto r_port_no){
+    ConnectAckMessage msg;
+    int msgSize = sizeof(ConnectAckMessage);
+    msg.header.packetSize = msgSize;
+    msg.header.msgType = MessageType::ConnectAcknowledgementMsg;
+    msg.header.senderPort = s_port_no;
+    msg.header.receivePort = r_port_no;
+    std::memcpy(buffer, &msg, sizeof(ConnectAckMessage));
+    return msgSize;
+  }
+
   int encodeDisconnectMsg(auto& buffer, auto s_port_no, auto r_port_no){
     DisconnectMessage msg;
     int msgSize = sizeof(DisconnectMessage);
@@ -91,6 +102,21 @@ public:
 
   // Decoder
 
+  const auto decodeMessageType(const auto& buffer){
+    const auto* const msg = (MessageHeader *) buffer;
+    return msg->msgType;
+  }
+
+  const auto decodeConnectAckMsg(const auto& buffer){
+    const auto* const msg = (ConnectAckMessage*) buffer;
+    return msg->header.receivePort;
+  }
+
+  const auto decodeConnectMsg(const auto& buffer){
+    const auto* const msg = (ConnectMessage*) buffer;
+    return msg->header.receivePort;
+  }
+
   const auto decodeDisconnectMsg(const auto& buffer){
     const auto* const msg = (DisconnectMessage*) buffer;
     return msg->header.receivePort;
@@ -114,17 +140,6 @@ public:
   const auto decodeResponseDataMsg(const auto& buffer){
     const auto* const msg = (ResponseDataMessage*) buffer;
     return data_response{msg->idx, msg->header.receivePort, msg->nonce, std::string(msg->phash), std::string(msg->chash), std::string(msg->data)};
-  }
-
-  // Relay
-
-  unsigned short relayConnectAckMsg(auto& buffer, auto s_port_no, auto r_port_no){
-    auto* msg = (ConnectMessage*) buffer;
-    unsigned short pport = msg->header.receivePort;
-    msg->header.msgType = MessageType::ConnectAcknowledgementMsg;
-    msg->header.senderPort = s_port_no;
-    msg->header.receivePort = r_port_no;
-    return pport;
   }
 
 };

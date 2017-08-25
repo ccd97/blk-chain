@@ -5,14 +5,9 @@
 
 ClientHandler c;
 
-void sig_int_handler(int s){
-  c.disconnect();
-  exit(1);
-}
-
 int main(int argc, char const *argv[]) {
-
-  signal(SIGINT, sig_int_handler);
+  
+  c.start();
 
   while(true){
     int choice;

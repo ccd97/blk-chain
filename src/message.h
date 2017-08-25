@@ -24,6 +24,10 @@ struct ConnectMessage{
   MessageHeader header;
 };
 
+struct ConnectAckMessage{
+  MessageHeader header;
+};
+
 struct DisconnectMessage{
   MessageHeader header;
 };
