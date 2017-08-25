@@ -52,23 +52,23 @@ public:
 
   // Getters
 
-  const auto get_chash(){
+  const auto get_chash() const {
     return std::string(chash, HASH_SIZE);
   }
 
-  const auto get_phash(){
+  const auto get_phash() const {
     return std::string(phash, HASH_SIZE);
   }
 
-  const auto get_index(){
+  const auto get_index() const {
     return index;
   }
 
-  const auto get_nonce(){
+  const auto get_nonce() const {
     return nonce;
   }
 
-  const auto get_data(){
+  const auto get_data() const {
     return std::string(data, DATA_SIZE);
   }
 
@@ -96,7 +96,7 @@ private:
     hash.copy(chash, hash.length());
   }
 
-  std::string sha256(const std::string& str) {
+  std::string sha256(const std::string& str) const {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256_CTX sha256;
     SHA256_Init(&sha256);
@@ -109,7 +109,7 @@ private:
     return ss.str();
   }
 
-  bool is_mined(){
+  bool is_mined() const {
     auto len = HASH_SIZE;
     if (chash[len - 1] == '4' && chash[len - 2] == '3' &&
         chash[len - 3] == '2' && chash[len - 4] == '1') {

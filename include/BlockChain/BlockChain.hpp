@@ -19,12 +19,12 @@ public:
     chain.back().mine_block();
   }
 
-  void addData(std::string& data){
+  void addData(const std::string& data){
     chain.emplace_back(chain.size(), chain.back().get_chash(), data);
     chain.back().mine_block();
   }
 
-  void updateBlock(auto _idx, auto _nonce, auto& _phash, auto& _chash, auto& _data){
+  void updateBlock(auto _idx, auto _nonce, const auto& _phash, const auto& _chash, const auto& _data){
     if(_idx == chain.size()){
       chain.emplace_back(_idx, _nonce, _phash, _chash, _data);
     }
@@ -35,7 +35,7 @@ public:
     }
   }
 
-  void updateData(auto _idx, auto& _data){
+  void updateData(auto _idx, const auto& _data){
     auto c_it = chain.begin();
     std::advance(c_it, _idx);
     c_it->set_data(_data);
@@ -43,7 +43,7 @@ public:
     repairChain();
   }
 
-  auto getLength(){
+  auto getLength() const {
     return chain.size();
   }
 
@@ -59,20 +59,20 @@ public:
     }
   }
 
-  auto getChash(auto index){
+  auto getChash(auto index) const {
     auto c_it = chain.begin();
     std::advance(c_it, index);
     return c_it->get_chash();
   }
 
-  auto getBlock(auto index){
+  auto getBlock(auto index) const {
     auto c_it = chain.begin();
     std::advance(c_it, index);
     return std::tuple{c_it->get_nonce(), c_it->get_phash(), c_it->get_chash(), c_it->get_data()};
   }
 
-  void printChain(){
-    for(auto& b : chain){
+  void printChain() const {
+    for(const auto& b : chain){
       std::cout<<"========== Block " << b.get_index() << " ==========" << std::endl;
       std::cout<<"P-hash : "<<b.get_phash()<<std::endl;
       std::cout<<"C-hash : "<<b.get_chash()<<std::endl;

@@ -64,17 +64,17 @@ public:
     synchronizer = std::thread([this](){ startSyanchronizer(); });
   }
 
-  void printPeers(){
+  void printPeers() const {
     for(auto i : peer_ports){
       std::cout << "Peer : " << i << std::endl;;
     }
   }
 
-  void printBlockChain(){
+  void printBlockChain() const {
     bchain.printChain();
   }
 
-  void addData(std::string& data){
+  void addData(const std::string& data){
     bchain.addData(data);
   }
 
@@ -125,7 +125,7 @@ private:
     }
   }
 
-  void sendDataRequest(Idx index, std::string& chash, std::vector<unsigned short>& ports){
+  void sendDataRequest(Idx index, const std::string& chash, const std::vector<unsigned short>& ports){
     // dmsg("Send Request DATA index:" << index);
     int msgSize = encoder.encodeRequestDataMsg(sendBuffer, s_port, r_port, index, chash);
     for(auto p : ports){
@@ -151,7 +151,7 @@ private:
         break;
       }
 
-      auto* messageHeader = (MessageHeader *)(recvBuffer);
+      const auto* const messageHeader = (MessageHeader *)(recvBuffer);
 
       switch (messageHeader->msgType) {
 
@@ -169,7 +169,7 @@ private:
 
         case MessageType::DisconnectMsg:{
           unsigned short pport = encoder.decodeDisconnectMsg(recvBuffer);
-          auto p_it = peer_ports.find(pport);
+          const auto p_it = peer_ports.find(pport);
           if(p_it != peer_ports.end()){
             peer_ports.erase(p_it);
           }
@@ -188,7 +188,7 @@ private:
         }
 
         case MessageType::ResponseChashMsg:{
-          auto res = decoder.decodeResponseChashMsg(recvBuffer);
+          const auto res = decoder.decodeResponseChashMsg(recvBuffer);
           // dmsg("Recv Respons Chash index:" << res.idx << " hash:" << res.chash);
           chash_lfq.push(res);
           break;
@@ -198,7 +198,7 @@ private:
           auto [index, send_to_port] = decoder.decodeRequestDataMsg(recvBuffer);
           // dmsg("Recv Request DATA index:" << index << " port:" << send_to_port);
           if(index < bchain.getLength()){
-            auto&& [nonce, phash, chash, data] = bchain.getBlock(index);
+            auto [nonce, phash, chash, data] = bchain.getBlock(index);
             auto msgSize = encoder.encodeResponseDataMsg(sendBuffer, s_port, r_port, index, nonce, phash, chash, data);
             s_sock->sendTo(sendBuffer, msgSize, IP_ADDR, send_to_port);
           }
@@ -206,7 +206,7 @@ private:
         }
 
         case MessageType::ResponseDataMsg:{
-          auto res = decoder.decodeResponseDataMsg(recvBuffer);
+          const auto& res = decoder.decodeResponseDataMsg(recvBuffer);
           // dmsg("Recv Reespons DATA index:" << res.idx << " data:" << res.data);
           bchain.updateBlock(res.idx, res.nonce, res.phash, res.chash, res.data);
           sendChashRequest(res.idx + 1);
@@ -227,7 +227,7 @@ private:
 
     while (true) {
       if(!chash_lfq.empty()){
-        const chash_response* res = chash_lfq.front<chash_response>();
+        const auto* const res = chash_lfq.front<chash_response>();
 
         if(currIdx == -1){
           currIdx = res->idx;
@@ -264,11 +264,11 @@ private:
 
   }
 
-  void sendDataRequestFromChashResponse(auto& currIdx, auto& chash_response_map){
+  void sendDataRequestFromChashResponse(const auto& currIdx, const auto& chash_response_map){
     int max = 0;
     std::string chash;
-    std::vector<unsigned short>* max_elem;
-    for(auto& p: chash_response_map){
+    const std::vector<unsigned short>* max_elem;
+    for(const auto& p: chash_response_map){
       if(max < p.second.size()){
         max = p.second.size();
         max_elem = &p.second;
