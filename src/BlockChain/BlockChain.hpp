@@ -40,7 +40,6 @@ public:
     std::advance(c_it, _idx);
     c_it->set_data(_data);
     c_it->mine_block(true);
-    repairChain();
   }
 
   auto getLength() const {

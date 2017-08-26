@@ -88,6 +88,11 @@ public:
     bchain.addData(data);
   }
 
+  void updateData(Idx idx, const std::string& data){
+    std::scoped_lock bchain_lock(bchain_mutex);
+    bchain.updateData(idx, data);
+  }
+
   void disconnect(){
     sendDisconnectMessage();
   }
@@ -141,8 +146,8 @@ private:
     sendMultiple(peer_ports, [this, index](auto& buffer){ return encoder.encodeRequestChashMsg(buffer, s_port, r_port, index); });
   }
 
-  void sendDataRequest(Idx index, const std::string& chash, const std::vector<unsigned short>& ports){
-    sendMultiple(ports, [this, index, &chash](auto& buffer){ return encoder.encodeRequestDataMsg(buffer, s_port, r_port, index, chash); });
+  void sendDataRequest(Idx index, const std::string& chash, const auto port){
+    send(port, [this, index, &chash](auto& buffer){ return encoder.encodeRequestDataMsg(buffer, s_port, r_port, index, chash); });
   }
 
   void listen(){
@@ -155,7 +160,7 @@ private:
           break; // Some error.
       }
       if(totalRecvMsgSize == -1 && errno == EAGAIN) {
-          std::this_thread::sleep_for(std::chrono::microseconds(1000));
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
           continue;
       }
       if(totalRecvMsgSize == 0) {
@@ -225,7 +230,9 @@ private:
           // dmsg("Recv Reespons DATA index:" << res.idx << " data:" << res.data);
           std::scoped_lock bchain_lock(bchain_mutex);
           bchain.updateBlock(res.idx, res.nonce, res.phash, res.chash, res.data);
-          sendChashRequest(res.idx + 1);
+          if(res.idx < bchain.getLength()){
+            sendChashRequest(res.idx + 1);
+          }
           break;
         }
       }
@@ -235,9 +242,9 @@ private:
 
   void startSyanchronizer(){
 
-    sendChashRequest(0);
+    static constexpr unsigned short INF = 65535;
 
-    Idx currIdx = -1;
+    Idx currIdx = INF;
     TimePoint now = std::chrono::system_clock::now();
     std::unordered_map<std::string, std::vector<unsigned short>> chash_response_map;
 
@@ -246,15 +253,14 @@ private:
       while(!chash_queue.empty()){
         const chash_response res = chash_queue.front();
 
-        if(currIdx == -1){
+        if(currIdx == INF){
           currIdx = res.idx;
           now = std::chrono::system_clock::now();
           chash_response_map.clear();
         }
 
-        if(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - now).count() >  2500 || currIdx != res.idx){
-          sendDataRequestFromChashResponse(currIdx, chash_response_map);
-          currIdx = -1;
+        if(currIdx != res.idx){
+          chash_queue.pop();
           continue;
         }
 
@@ -264,38 +270,41 @@ private:
         else{
           c_it->second.push_back(res.port);
         }
-
         chash_queue.pop();
       }
       chash_q_mutex.unlock();
 
-      if(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - now).count() > 500){
-        if(currIdx != -1){
+      if(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - now).count() > 250){
+        if(currIdx != INF){
           sendDataRequestFromChashResponse(currIdx, chash_response_map);
+          now = std::chrono::system_clock::now();
+          currIdx = INF;
         }
-        currIdx = -1;
+      }
+
+      if(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - now).count() > 350 && currIdx == INF){
         now = std::chrono::system_clock::now();
         sendChashRequest(0);
       }
 
     }
 
-    std::this_thread::sleep_for(std::chrono::microseconds(1000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
   }
 
   void sendDataRequestFromChashResponse(const auto& currIdx, const auto& chash_response_map){
-    int max = 0;
+    unsigned int max = 0;
     std::string chash;
-    const std::vector<unsigned short>* max_elem;
+    unsigned short port = 0;
     for(const auto& p: chash_response_map){
       if(max < p.second.size()){
         max = p.second.size();
-        max_elem = &p.second;
+        port = p.second.front();
         chash = p.first;
       }
     }
-    sendDataRequest(currIdx, chash, *max_elem);
+    sendDataRequest(currIdx, chash, port);
   }
 
 };
